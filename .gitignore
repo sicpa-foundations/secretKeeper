@@ -1,0 +1,11 @@
+secret.txt
+*.db
+.idea
+.idea/*
+.DS_Store
+__pycache__
+reports/*.json
+.env.app
+.env.rabbitmq
+.env.app.local
+.env.app.production

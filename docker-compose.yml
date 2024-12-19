@@ -1,0 +1,56 @@
+version: '3'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    env_file:
+      - .env
+      - .env.rabbitmq
+    volumes:
+      - /opt/gitdefender/config:/config
+      - /opt/gitdefender/logs:/data/logs
+    depends_on:
+      - rabbit
+    networks:
+      rabbit:
+      db:
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    env_file:
+      - .env.rabbitmq
+    command: celery -A app.celery beat -l info
+    depends_on:
+      - app
+      - rabbit
+    networks:
+      rabbit:
+
+  rabbit:
+    image: rabbitmq:latest
+    env_file: .env.rabbitmq
+    networks:
+      rabbit:
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=localpassword
+      - POSTGRES_DB=secretkeeper
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      db:
+    ports:
+      - "5432:5432"
+
+networks:
+  db:
+  rabbit:
+
+volumes:
+  pgdata:

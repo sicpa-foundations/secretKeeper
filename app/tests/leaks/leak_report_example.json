@@ -1,0 +1,22 @@
+[
+  {
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "StartLine": 150,
+    "EndLine": 151,
+    "StartColumn": 2,
+    "EndColumn": 1,
+    "Match": "REDACTED",
+    "Secret": "REDACTED",
+    "File": "/tmp/test-project/manifests/company/grafana/configs/grafana2/grafana.ini",
+    "SymlinkFile": "",
+    "Commit": "",
+    "Entropy": 4.657882,
+    "Author": "",
+    "Email": "",
+    "Date": "2024-13-01",
+    "Message": "",
+    "Tags": [],
+    "RuleID": "generic-api-key",
+    "Fingerprint": "/tmp/test-project/manifests/company/grafana/configs/grafana2/grafana.ini:generic-api-key:150"
+  }
+]

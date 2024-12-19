@@ -1,0 +1,143 @@
+git_sources:
+  bitbucket:
+    enabled: false
+    url: "https://XXX"
+    type: "bitbucket"
+    mode: 'incremental'
+    credentials_env:
+      username: 'BITBUCKET_ACCESS_USERNAME'
+      token: 'BITBUCKET_ACCESS_TOKEN'
+    ssh:
+      private_key: '~/.ssh/id_ed25519'
+      port: 22
+      strict_host_key_checking: 'no'
+    excludes:
+      repositories:
+  github:
+    enabled: false
+    url: "https://github.com"
+    type: "github"
+    mode: 'full'
+    credentials_env:
+      username: 'GITHUB_USERNAME'
+      token: 'GITHUB_ACCESS_TOKEN'
+secret_sources:
+  hashicorp_vault:
+    enabled: false
+    url: "https://vault.URL/"
+    type: "hcVault"
+    path: "vault/data"
+    auth_method: "approle"
+    ca_cert: ca_dev.cert
+    excludes:
+    credentials_env:
+      role_id: 'HC_VAULT_ROLE_ID'
+      token: 'HC_VAULT_ACCESS_TOKEN'
+notifications:
+  permissions:
+  leak:
+  compliance:
+  settings:
+  email:
+    enabled: false
+    recipients:
+      - YOUR_EMAIL
+  teams:
+    enabled: false
+fetcher:
+  import_repositories: true
+best_practices:
+  project:
+    check_access_to_admin:
+      enable: true
+      notification: true
+    check_default_permissions:
+      enable: true
+      notification: true
+      default_value: NO_ACCESS
+    check_no_external_user_as_admin:
+      enable: true
+      notification: true
+    check_number_admin:
+      enable: true
+      notification: true
+      max: 5
+    check_permissions_read:
+      enable: true
+      notification: true
+      groups: [ ]
+    check_permissions_admin:
+      enable: true
+      notification: false
+      groups:
+        - app_git_ww_administrator
+        - app_git_ww_system_administrator
+      forbidden_groups:
+        - app_git_ww
+    check_permissions_write:
+      enable: true
+      notification: true
+      groups:
+        - app_git_ww
+  repository:
+    check_branch_restriction:
+      enable: true
+      notification: true
+      pull_request_only: true
+      fast_forward_only: true
+      no_deletes: true
+      min_approval: true
+    check_access_to_admin:
+      enable: true
+      notification: true
+    check_no_external_user_as_admin:
+      enable: true
+      notification: true
+    check_no_groups:
+      enable: true
+      notification: true
+    check_number_admin:
+      enable: true
+      notification: true
+      max: 5
+scanner:
+  config_file: "app/config/gitleaks.toml"
+  ignore:
+    files:
+      - acapy-api.yaml
+      - Podfile.lock
+      - test_vectors.rs
+    folders:
+      - test
+      - testCommon
+      - __tests__
+      - tests
+      - site-packages
+      - node_modules
+      - tutorials
+      - notebooks
+    extensions:
+      - .map
+      - .sum
+      - .bmp
+      - .so
+      - .dll
+      - .exe
+      - .rdl
+      - .dat
+      - .resx
+      - .h
+      - .suo
+      - .dill
+      - .dtsx
+      - .csproj
+      - .svcinfo
+      - .vdproj
+      - .msi
+      - .jar
+      - .xsd
+      - .json
+  max_clone_time: 60
+  last_scan_days: 0
+  tmp_git_folder: "/tmp/"
+  report_path: "reports/"
