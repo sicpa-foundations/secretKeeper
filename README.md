@@ -3,7 +3,7 @@
 ![img.png](img.png)
 
 SecretKeeper is a tool for detecting secrets and misconfigurations on your Git repositories (Bitbucket and GitHub).
-It uses [gitleaks](https://github.com/gitleaks/gitleaksgitleaks) to scan for secrets, in order to reduce the number
+It uses [gitleaks](https://github.com/gitleaks/gitleaks) to scan for secrets, in order to reduce the number
 of false positives, it has the ability to fetch the secrets in Hashicorp Vault.
 
 The current features for BitBucket integration:
