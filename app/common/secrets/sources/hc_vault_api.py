@@ -24,9 +24,7 @@ class HcVaultSecretSource(AbstractSecretSource):
         self.auth_method = vault_config.get("auth_method", "approle")
         self.path = vault_config.get("path", None)
 
-        self.client = hvac.Client(
-            url=self.url, verify=vault_config.get("ca_cert", None)
-        )
+        self.client = hvac.Client(url=self.url, verify=vault_config.get("ca_cert", None))
 
         self.client.auth.approle.login(
             use_token=True,

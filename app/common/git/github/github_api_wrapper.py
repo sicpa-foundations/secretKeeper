@@ -1,4 +1,3 @@
-import logging
 import os
 from datetime import datetime, date
 
@@ -7,14 +6,20 @@ from sqlalchemy.orm import Session
 
 from app.common.git.abstract_git_api_wrapper import AbstractGitApiWrapper
 from app.common.git.abstract_git_data import AbstractGitData
+from app.utils.tools import read_config
 from common.models.basemodel import engine
 from common.models.repository import Repository
-from app.utils.tools import read_config
 from common.models.repository_project import RepositoryProject
 from common.models.user import User
 
 
 class GithubApiWrapper(AbstractGitApiWrapper):
+    def set_webhooks_for_project_on_pr(self, project_key: str, wh_name: str, wh_url: str) -> list[dict]:
+        pass
+
+    def get_webhooks_for_project(self, project_key: str) -> list[dict]:
+        pass
+
     def __init__(self, source: AbstractGitData, repo_db=None):
         super().__init__(source, repo_db, source.url)
         self.api = Github(source.token, per_page=1000)
@@ -23,9 +28,7 @@ class GithubApiWrapper(AbstractGitApiWrapper):
         from git import Repo
 
         url = self.get_repository().url_http
-        path = read_config("scanner.tmp_git_folder") + url.split("/")[-1].replace(
-            ".git", ""
-        )
+        path = read_config("scanner.tmp_git_folder") + url.split("/")[-1].replace(".git", "")
         if not os.path.exists(path):
             os.makedirs(path)
         try:
@@ -43,15 +46,7 @@ class GithubApiWrapper(AbstractGitApiWrapper):
         return path
 
     def get_leak_url(self, leak):
-        return (
-            self.get_repository().url_http
-            + "/blob/"
-            + leak["Branch"]
-            + "/"
-            + leak["File"]
-            + "#L"
-            + str(leak["StartLine"])
-        )
+        return self.get_repository().url_http + "/blob/" + leak["Branch"] + "/" + leak["File"] + "#L" + str(leak["StartLine"])
 
     def get_repository(self, url=None) -> Repository | None:
         if self.repo is not None:
@@ -63,9 +58,7 @@ class GithubApiWrapper(AbstractGitApiWrapper):
             self.api = Github(self.token, per_page=1000)
 
         with Session(engine) as session:
-            _repo = (
-                session.query(Repository).filter(Repository.url_http == _url).first()
-            )
+            _repo = session.query(Repository).filter(Repository.url_http == _url).first()
             if _repo is not None:
                 self.repo = _repo
                 self.repo_from_db = _repo
@@ -101,9 +94,7 @@ class GithubApiWrapper(AbstractGitApiWrapper):
         outside_collabs = list(
             map(
                 lambda user: user.login,
-                list(
-                    self.get_github_repo(repo).get_collaborators(affiliation="outside")
-                ),
+                list(self.get_github_repo(repo).get_collaborators(affiliation="outside")),
             )
         )
         result = []
@@ -112,7 +103,6 @@ class GithubApiWrapper(AbstractGitApiWrapper):
             with Session(engine) as session:
                 user_db = session.query(User).filter(User.slug == _user.login).first()
                 if user_db:
-
                     result.append(
                         {
                             "user": {
@@ -135,9 +125,7 @@ class GithubApiWrapper(AbstractGitApiWrapper):
                 else:
                     result.append(
                         {
-                            "user": self._process_user(
-                                _user, outside_collabs=outside_collabs
-                            ),
+                            "user": self._process_user(_user, outside_collabs=outside_collabs),
                             "permissions": list(
                                 filter(
                                     lambda attr: _user.permissions.raw_data[attr],
@@ -219,16 +207,14 @@ class GithubApiWrapper(AbstractGitApiWrapper):
         try:
             data = self.api.get_repo(repo.name).get_branch(branch)
         except Exception as e:
-            logging.warning(e)
+            self.log.warning(e)
             return {}
 
         if not data.protected:
             return {}
         result = {}
         protections = data.get_protection()
-        required_pull_request_review = protections.raw_data.get(
-            "required_pull_request_reviews", {}
-        )
+        required_pull_request_review = protections.raw_data.get("required_pull_request_reviews", {})
         result["permissions"] = list(
             filter(
                 lambda attr: required_pull_request_review[attr] is True,
@@ -251,23 +237,15 @@ class GithubApiWrapper(AbstractGitApiWrapper):
 
         result["permissions"] += list(
             filter(
-                lambda attr: protections.raw_data[attr].get("enabled", False)
-                if isinstance(protections.raw_data[attr], dict)
-                else False,
+                lambda attr: protections.raw_data[attr].get("enabled", False) if isinstance(protections.raw_data[attr], dict) else False,
                 protections.raw_data.keys(),
             )
         )
-        result["reviewers_required_count"] = required_pull_request_review.get(
-            "required_approving_review_count", 0
-        )
+        result["reviewers_required_count"] = required_pull_request_review.get("required_approving_review_count", 0)
         return result
 
-    def get_project_last_activity(
-        self, project: RepositoryProject, last_days: int = 10
-    ) -> date:
+    def get_project_last_activity(self, project: RepositoryProject, last_days: int = 10) -> date:
         return datetime.now().date()
 
-    def get_repository_last_activities(
-        self, repository: Repository, last_days: int = 10
-    ) -> date:
+    def get_repository_last_activities(self, repository: Repository, last_days: int = 10) -> date:
         return datetime.now().date()

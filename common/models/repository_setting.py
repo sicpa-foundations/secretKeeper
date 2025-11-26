@@ -14,9 +14,7 @@ class RepositorySetting(BaseModel):
     matcher_active = db.Column(db.Boolean, unique=False, default=True)
     scope_type = db.Column(db.String(255))
 
-    repository_id = db.Column(
-        db.Integer, db.ForeignKey("repository.id", ondelete="CASCADE"), nullable=True
-    )
+    repository_id = db.Column(db.Integer, db.ForeignKey("repository.id", ondelete="CASCADE"), nullable=True)
     repository = relationship("Repository", back_populates="setting")
 
     project_id = db.Column(
@@ -36,9 +34,7 @@ class RepositorySettingUser(BaseModel):
         db.ForeignKey("repository_setting.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id = db.Column(
-        db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
 
 
 class RepositorySettingGroup(BaseModel):
@@ -48,6 +44,4 @@ class RepositorySettingGroup(BaseModel):
         db.ForeignKey("repository_setting.id", ondelete="CASCADE"),
         nullable=False,
     )
-    group_id = db.Column(
-        db.Integer, db.ForeignKey("group.id", ondelete="CASCADE"), nullable=False
-    )
+    group_id = db.Column(db.Integer, db.ForeignKey("group.id", ondelete="CASCADE"), nullable=False)

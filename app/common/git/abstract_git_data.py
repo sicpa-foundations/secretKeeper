@@ -7,12 +7,12 @@ from common.models.repository import Repository
 class AbstractGitData(ABC):
     """Abstract class for Git Data"""
 
-    query_filters: list = []
-    enabled: bool = False
-    url: str
-    exclude_repos: list
-
     def __init__(self, config):
+        self.query_filters: list = []
+        self.enabled: bool = False
+        self.url: str
+        self.exclude_repos: list
+
         self.config = config
         self.url = config.get("url", None)
         self.mode = config.get("mode", None)
@@ -27,3 +27,4 @@ class AbstractGitData(ABC):
         if self.url is not None:
             self.query_filters.append(Repository.url_http.ilike(f"{self.url}%"))
         self.query_filters.append(Repository.url_http.notlike("%~%"))
+        self.query_filters.append(Repository.deleted == False)

@@ -9,9 +9,9 @@ from app.common.git.abstract_git_api_wrapper import AbstractGitApiWrapper
 from app.runners.checkers.rules.repository.abstract_repository_checker import (
     AbstractRepositoryChecker,
 )
-from common.models.repository import Repository
 from app.utils.notifications import process_notification
 from app.utils.tools import read_config
+from common.models.repository import Repository
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -41,7 +41,7 @@ class AbstractChecker(ABC):
         enable = config["enable"]
         if not enable:
             return []
-        _class = clazz()
+        _class = clazz(self.wrapper)
         _class.check(data, session, config)
         notifications = _class.get_notifications()
 
@@ -59,9 +59,7 @@ class AbstractChecker(ABC):
             notifications = []
 
             for clazz in AbstractRepositoryChecker.__subclasses__():
-                notifications += self.process_checker_clazz(
-                    clazz, checkers, repo, self.session
-                )
+                notifications += self.process_checker_clazz(clazz, checkers, repo, self.session)
 
             for notification in notifications:
                 process_notification(notification, self.session)

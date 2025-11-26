@@ -38,7 +38,7 @@ notifications:
   email:
     enabled: true
     recipients:
-      - michael.atkinson@sicpa.com
+      - RECIPIENT_EMAIL
   teams:
     enabled: false
 fetcher:

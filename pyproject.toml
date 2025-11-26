@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SecretKeeper"
-version = "1.0.0"
+version = "1.0.1"
 description = ""
 authors = ["Michael Atkinson <michael.atkinson@sicpa.com>"]
 readme = "README.md"

@@ -1,20 +1,20 @@
-import subprocess
 import datetime
 import logging
 import os
+import subprocess
 
 import dateparser
 from sqlalchemy import and_
 
-from app.common.secrets.process_secret_sources import GitLeaksVault
+from app.common.secrets.process_secret_sources import global_vault_utility
 from app.runners.processors.abstract_processor import AbstractProcessor
-from common.models.notification_action_enum import NotificationActionEnum
-from common.models.notification_enum import NotificationEnum
-from common.models.gitleaks import Gitleak
-from common.models.notifications import Notification
 from app.utils import tools
 from app.utils.notifications import process_notification
 from app.utils.tools import read_config
+from common.models.gitleaks import Gitleak
+from common.models.notification_action_enum import NotificationActionEnum
+from common.models.notification_enum import NotificationEnum
+from common.models.notifications import Notification
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -26,9 +26,9 @@ class LeaksProcessor(AbstractProcessor):
 
     def process(self, path: str):
         self.path = path
-        glv = GitLeaksVault()
-        self.config_filename = glv.generate_gitleaks_config_file()
+        self.config_filename = global_vault_utility.generate_gitleaks_config_file()
         self.run_gitleaks()
+        self.process_gitleaks()
 
     def run_gitleaks(
         self,
@@ -47,6 +47,7 @@ class LeaksProcessor(AbstractProcessor):
                 "--redact",
                 "--no-git",
             ]
+            log.debug(" ".join(full_args))
             result = subprocess.run(full_args, capture_output=True, text=True)
             log.info("Gitleaks scan done")
             log.debug(result.stdout)
@@ -59,9 +60,7 @@ class LeaksProcessor(AbstractProcessor):
         return False
 
     def check_existing_leaks(self, leaks_found):
-        log.info(
-            f"Checking existing leaks to see if some have been fixed for {self.repo.name}"
-        )
+        log.info(f"Checking existing leaks to see if some have been fixed for {self.repo.name}")
 
         leaks = (
             self.session.query(Gitleak)
@@ -111,13 +110,11 @@ class LeaksProcessor(AbstractProcessor):
             return
         try:
             leaks = self.filter_leaks()
-            leaks_objects = []
+            leaks_obj = []
             for leak in leaks:
                 # Check duplicate
                 leak["File"] = (
-                    leak["File"]
-                    .replace(read_config("scanner.tmp_git_folder"), "")
-                    .replace(self.git_api_wrapper.repo.slug + "/", "", 1)
+                    leak["File"].replace(read_config("scanner.tmp_git_folder"), "").replace(self.git_api_wrapper.repo.slug + "/", "", 1)
                 )
 
                 leak["Date"] = dateparser.parse(leak["Date"])
@@ -125,6 +122,11 @@ class LeaksProcessor(AbstractProcessor):
                 _repo_url = self.git_api_wrapper.get_leak_url(leak)
                 if read_config("scanner.display.links", default=False):
                     log.info(_repo_url)
+                # Get blame to have commit information
+                commits = self.get_commits_from_line(
+                    read_config("scanner.tmp_git_folder") + self.git_api_wrapper.repo.slug,
+                    leak,
+                )
 
                 gitleak = Gitleak(
                     branch=self.repo.default_branch,
@@ -141,14 +143,6 @@ class LeaksProcessor(AbstractProcessor):
                     date=leak["Date"],
                     tags=leak["Tags"],
                 )
-                log.info("Checking duplication")
-
-                # Get blame to have commit information
-                commits = self.get_commits_from_line(
-                    read_config("scanner.tmp_git_folder")
-                    + self.git_api_wrapper.repo.slug,
-                    leak,
-                )
                 if len(commits) > 0:
                     commit = commits[-1]
                     gitleak.commitMessage = commit["title"]
@@ -156,31 +150,36 @@ class LeaksProcessor(AbstractProcessor):
                     gitleak.date = commit["date"]
                     gitleak.commit = commit["hash"]
 
+                leaks_obj.append(gitleak)
+            for leak_obj in leaks_obj:
+                log.debug("Checking duplication")
+
                 leak_db = (
                     self.session.query(Gitleak)
                     .filter(
-                        Gitleak.file == gitleak.file,
-                        Gitleak.rule == gitleak.rule,
-                        Gitleak.date == gitleak.date,
-                        Gitleak.branch == gitleak.branch,
-                        Gitleak.commit == gitleak.commit,
+                        Gitleak.file == leak_obj.file,
+                        Gitleak.rule == leak_obj.rule,
+                        Gitleak.date == leak_obj.date,
+                        Gitleak.branch == leak_obj.branch,
+                        Gitleak.commit == leak_obj.commit,
                         Gitleak.repository_id == self.git_api_wrapper.repo.id,
                     )
                     .first()
                 )
-                leaks_objects.append(gitleak)
                 if leak_db is not None:
                     # Check if line number has changed
-                    if leak_db.lineNumber != gitleak.lineNumber:
-                        log.warning(
-                            f"Found a leak that has only changed number of line. Leak ID: {leak_db.id}. Updating the line number"
-                        )
-                        leak_db.lineNumber = gitleak.lineNumber
+                    if leak_db.lineNumber != leak_obj.lineNumber:
+                        leaks_same_file = self.find_matching_gitleaks(leaks_obj, leak_db, leak_db.lineNumber)
+                        if len(leaks_same_file) > 0:
+                            log.info("Find duplicate leak in the same file, not treating it as duplicate")
+                        else:
+                            log.warning(
+                                f"Found a leak that has only changed number of line. Leak ID: {leak_db.id}. Updating the line number"
+                            )
+                            leak_db.lineNumber = leak_obj.lineNumber
                         continue
                     if leak_db.fixed:
-                        log.warning(
-                            f"Found a fixed leak in the repo. Leak ID: {leak_db.id}. Removing the fixed flag."
-                        )
+                        log.warning(f"Found a fixed leak in the repo. Leak ID: {leak_db.id}. Removing the fixed flag.")
                         leak_db.fixed = False
                         leak_db.fixed_date = None
                         continue
@@ -188,20 +187,20 @@ class LeaksProcessor(AbstractProcessor):
                     log.debug("Leak already processed. Skipping")
                     continue
 
-                content = f"A new leak has been found in repo {self.repo.slug}. <br />URL: {_repo_url}.<br />"
+                content = f"A new leak has been found in repo {self.repo.slug}. <br />URL: {leak_obj.leakURL}.<br />"
                 log.info(content)
 
                 if self.repo:
                     notification = Notification(
                         repository=self.repo,
                         action_type=NotificationActionEnum.ADD,
-                        leak=gitleak,
+                        leak=leak_obj,
                         type=NotificationEnum.LEAK,
                         content=content,
                     )
                     process_notification(notification, self.session)
-                    gitleak.repository = self.repo
-                    self.session.add(gitleak)
+                    leak_obj.repository = self.repo
+                    self.session.add(leak_obj)
                     log.info("Adding leak to database")
                 else:
                     log.error(
@@ -213,13 +212,18 @@ class LeaksProcessor(AbstractProcessor):
                 self.git_api_wrapper.repo.last_scan_date = datetime.datetime.today()
                 # self.session.add(processor.repo)
             self.session.commit()
-            self.check_existing_leaks(leaks_objects)
-            if (
-                self.git_api_wrapper.repo_from_db or len(leaks) == 0
-            ) and os.path.exists(self.git_api_wrapper.get_report_path()):
+            self.check_existing_leaks(leaks_obj)
+            if (self.git_api_wrapper.repo_from_db or len(leaks) == 0) and os.path.exists(self.git_api_wrapper.get_report_path()):
                 os.remove(self.git_api_wrapper.get_report_path())
         except Exception as e:
-            logging.exception(e)
+            log.exception(e)
+
+    def find_matching_gitleaks(self, gitleaks: list[Gitleak], gitleak: Gitleak, line_number: int) -> list[Gitleak]:
+        matching_leaks = filter(
+            lambda x: (x.file == gitleak.file and x.rule == gitleak.rule and x.lineNumber == line_number),
+            gitleaks,
+        )
+        return list(matching_leaks)
 
     def filter_leaks(self) -> list:
         report_path = self.git_api_wrapper.get_report_path()
@@ -229,13 +233,9 @@ class LeaksProcessor(AbstractProcessor):
 
         for leak in leaks:
             filename, file_extension = os.path.splitext(leak["File"])
-            if file_extension.lower() in read_config(
-                "scanner.ignore.extensions", default=[]
-            ):
+            if file_extension.lower() in read_config("scanner.ignore.extensions", default=[]):
                 continue
-            if filename.split("/")[-1] in read_config(
-                "scanner.ignore.files", default=[]
-            ):
+            if filename.split("/")[-1] in read_config("scanner.ignore.files", default=[]):
                 continue
             is_ignore = False
             for dir in read_config("scanner.ignore.folders", default=[]):
@@ -303,7 +303,7 @@ class LeaksProcessor(AbstractProcessor):
             if current_commit:
                 save_current_commit()
         except Exception:
-            logging.error(
+            log.warning(
                 "Error for getting blame: "
                 + " ".join(
                     [

@@ -1,17 +1,18 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
-import logging
 
 from sqlalchemy.orm import Session, Query
 
 from app.common.exceptions.access_denied_exception import AccessDeniedException
 from app.common.exceptions.repo_not_found_exception import RepoNotFoundException
 from app.common.exceptions.request_exception import RequestException
-from app.common.git.abstract_git_data import AbstractGitData
 from app.common.git.abstract_git_api_wrapper import AbstractGitApiWrapper
+from app.common.git.abstract_git_data import AbstractGitData
 from app.runners.checkers.abstract_checker import AbstractChecker
 from app.runners.fetchers.abstract_fetcher import AbstractFetcher
 from app.runners.fetchers.branches_fetcher import BranchesFetcher
+from app.runners.fetchers.fetcher_parameters import FetcherParameters
 from app.runners.fetchers.permissions_fetcher import PermissionsFetcher
 from app.runners.fetchers.settings_fetcher import SettingsFetcher
 from common.models.basemodel import engine
@@ -27,47 +28,48 @@ log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class AbstractGitService(ABC):
     """Abstract class for Git Service"""
 
-    data: AbstractGitData
-    service: AbstractGitApiWrapper
-
     def __init__(self, config: dict, session=None):
+        self.data: AbstractGitData
+        self.service: AbstractGitApiWrapper
         self.config = config
         self.session = session
         if session is None:
             self.session = Session(engine)
         self.wrapper = None
 
-    def run_fetcher(self, fetcher: AbstractFetcher, repo_url=None):
-        _fetcher = fetcher(self.session, self.wrapper, self.config)
-        _fetcher.fetch(self.get_repositories_query([], repo_url=repo_url))
+    def run_fetcher(self, fetcher: AbstractFetcher, parameters: FetcherParameters):
+        _fetcher = fetcher(self.session, self.wrapper, self.config, parameters=parameters)
+        _fetcher.fetch(self.get_repositories_query([], repo_url=parameters.repo_url))
 
     def run_checker(self, checker: AbstractChecker, repo_url=None):
         _checker = checker(self.session, self.wrapper, self.config)
-        _checker.check(self.get_repositories_query([], repo_url=repo_url))
+        _checker.check(self.get_repositories_query([], repo_url=repo_url), repo_url=repo_url)
 
     @abstractmethod
     def checker(self, repo_url=None):
         pass
 
     @abstractmethod
-    def fetch_data(self, repo_url=None):
+    def fetch_data(self, parameters: FetcherParameters):
         pass
 
-    def fetch_branches(self, repo_url=None):
-        self.run_fetcher(BranchesFetcher, repo_url=repo_url)
+    def fetch_branches(self, parameters: FetcherParameters):
+        self.run_fetcher(BranchesFetcher, parameters)
 
-    def fetch_settings(self, repo_url=None):
-        self.run_fetcher(SettingsFetcher, repo_url=repo_url)
+    def fetch_settings(self, parameters: FetcherParameters):
+        self.run_fetcher(SettingsFetcher, parameters)
 
-    def fetch_permissions(self, repo_url=None):
-        self.run_fetcher(PermissionsFetcher, repo_url=repo_url)
+    def fetch_permissions(self, parameters: FetcherParameters):
+        self.run_fetcher(PermissionsFetcher, parameters)
 
     def process_classification(self, repo_url=None, dry_run_label=True):
-        log.info("Running classification")
+        log.debug("Running classification")
         filters = [Repository.deleted.isnot(True)]  # noqa
-        if repo_url is not None:
-            filters.append(Repository.url_http == repo_url)
-        repositories = self.get_repositories_query([]).filter(*filters).all()
+        repositories = self.get_repositories_query([], repo_url=repo_url).filter(*filters).all()
+
+        if len(repositories) == 0:
+            log.debug("Skipping classification, no repo")
+            return
 
         critical_data = {0: "internal", 1: "confidential", 2: "vault secret"}
 
@@ -87,9 +89,7 @@ class AbstractGitService(ABC):
                 )
                 .all()
             )
-            log.debug(
-                f"Processing repo {i}/{len(repositories)}: {repo.name}, with {len(leaks)} leaks"
-            )
+            log.debug(f"Processing repo {i}/{len(repositories)}: {repo.name}, with {len(leaks)} leaks")
             i += 1
             for leak in leaks:
                 if "vault" in leak.tags:
@@ -138,9 +138,7 @@ class AbstractGitService(ABC):
                     if "internal" not in labels:
                         if "confidential" in labels:
                             try:
-                                log.debug(
-                                    f"Removing label confidential {repo.url_http}"
-                                )
+                                log.debug(f"Removing label confidential {repo.url_http}")
                                 self.wrapper.delete_label(repo, "confidential")
                             except Exception:
                                 pass  # It throws an exception if the tag doesn't exist
@@ -193,10 +191,7 @@ class AbstractGitService(ABC):
         projects = self.session.query(RepositoryProject).all()
         for project in projects:
             for repo in project.repositories:
-                if project.classification is None or (
-                    repo.classification is not None
-                    and project.classification < repo.classification
-                ):
+                if project.classification is None or (repo.classification is not None and project.classification < repo.classification):
                     project.classification = repo.classification
                     project.classification_reason = repo.classification_reason
         self.session.commit()
@@ -208,9 +203,4 @@ class AbstractGitService(ABC):
         _filters = []
         if repo_url is not None:
             _filters.append(Repository.url_http == repo_url)
-        return (
-            self.session.query(Repository)
-            .filter(*_filters)
-            .filter(*filters)
-            .filter(*self.data.query_filters)
-        )
+        return self.session.query(Repository).filter(*_filters).filter(*filters).filter(*self.data.query_filters)

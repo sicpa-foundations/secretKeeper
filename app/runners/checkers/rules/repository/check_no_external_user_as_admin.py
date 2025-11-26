@@ -20,10 +20,7 @@ class CheckNoExternalUserAsAdmin(AbstractRepositoryChecker):
                 permission.user is not None
                 and permission.permissions is not None
                 and permission.user.is_external_user(external_groups)
-                and (
-                    PermissionEnum.REPO_ADMIN in permission.permissions
-                    or "admin" in permission.permissions
-                )
+                and (PermissionEnum.REPO_ADMIN in permission.permissions or "admin" in permission.permissions)
             ):
                 self.notifications.append(
                     Notification(

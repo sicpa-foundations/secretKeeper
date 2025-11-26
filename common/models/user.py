@@ -14,13 +14,9 @@ class User(BaseModel):
     external = db.Column(db.Boolean, unique=False, default=False)
     slug = db.Column(db.String(255))
     remote_id = db.Column(db.Integer)
-    groups = relationship(
-        "Group", secondary="user_group_relation", back_populates="users"
-    )
+    groups = relationship("Group", secondary="user_group_relation", back_populates="users")
     permissions = relationship("RepositoryPermission", back_populates="user")
-    project_permissions = relationship(
-        "RepositoryProjectPermission", back_populates="user"
-    )
+    project_permissions = relationship("RepositoryProjectPermission", back_populates="user")
 
     def is_external_user(self, groups: list):
         if self.external:

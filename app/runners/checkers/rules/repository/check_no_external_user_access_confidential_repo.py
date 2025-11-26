@@ -17,11 +17,7 @@ class CheckNoExternalUserAccessConfidentialRepo(AbstractRepositoryChecker):
             return
 
         for permission in repository.permissions:
-            if (
-                permission.user is not None
-                and permission.permissions is not None
-                and permission.user.is_external_user(external_groups)
-            ):
+            if permission.user is not None and permission.permissions is not None and permission.user.is_external_user(external_groups):
                 self.notifications.append(
                     Notification(
                         repository=repository,

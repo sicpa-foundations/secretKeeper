@@ -1,4 +1,4 @@
-FROM python:3.12.7-slim
+FROM python:3.13.4-slim
 
 ENV GITLEAKS_VERSION=8.18.2
 ENV GITLEAKS_URL=https://github.com/zricethezav/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
@@ -21,7 +21,6 @@ RUN apt-get update && \
 COPY app/pyproject.toml pyproject.toml
 ENV POETRY_HOME=/opt/poetry
 ENV PATH="$POETRY_HOME/bin:$PATH"
-RUN echo "StrictHostKeyChecking no" >> /etc/ssh_config
 
 RUN curl -sSL https://install.python-poetry.org/ | python - && /opt/poetry/bin/poetry config virtualenvs.create false &&  /opt/poetry/bin/poetry install --no-interaction --no-ansi -vvv
 
@@ -31,4 +30,4 @@ COPY common common
 RUN useradd -ms /bin/bash celery
 
 USER celery
-CMD ["celery", "-A", "app.celery", "worker", "--concurrency=1"]
+CMD ["celery", "-A", "app.celery_app", "worker", "--concurrency=1"]

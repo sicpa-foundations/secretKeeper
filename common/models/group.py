@@ -18,14 +18,8 @@ class Group(BaseModel):
     active = db.Column(db.Boolean, unique=False, default=True)
     slug = db.Column(db.String(255))
     remote_id = db.Column(db.Integer)
-    organization_id = db.Column(
-        db.Integer, db.ForeignKey("gh_organization.id"), nullable=True
-    )
+    organization_id = db.Column(db.Integer, db.ForeignKey("gh_organization.id"), nullable=True)
     organization = relationship(GhOrganization, backref="organizations")
-    users = relationship(
-        "User", secondary="user_group_relation", back_populates="groups"
-    )
+    users = relationship("User", secondary="user_group_relation", back_populates="groups")
     group_permissions = relationship("RepositoryPermission", back_populates="group")
-    project_group_permissions = relationship(
-        "RepositoryProjectPermission", back_populates="group"
-    )
+    project_group_permissions = relationship("RepositoryProjectPermission", back_populates="group")

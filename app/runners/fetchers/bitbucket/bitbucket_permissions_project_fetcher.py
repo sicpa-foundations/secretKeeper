@@ -5,32 +5,26 @@ from sqlalchemy.orm import Session
 from app.common.exceptions.access_denied_exception import AccessDeniedException
 from app.common.exceptions.repo_not_found_exception import RepoNotFoundException
 from app.common.git.bitbucket.bitbucket_api_wrapper import BitbucketApiWrapper
-from app.runners.fetchers.permissions_fetcher import PermissionsFetcher
+from app.runners.fetchers.abstract_fetcher import AbstractFetcher
+from app.utils.helper import process_user, process_group
+from app.utils.notifications import process_notification
 from common.models.notification_action_enum import NotificationActionEnum
 from common.models.notification_enum import NotificationEnum
-from common.models.permission_enum import PermissionEnum
 from common.models.notifications import Notification
+from common.models.permission_enum import PermissionEnum
 from common.models.repository_project import (
     RepositoryProject,
     RepositoryProjectPermission,
 )
-from app.utils.helper import process_user, process_group
-from app.utils.notifications import process_notification
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class BitbucketPermissionsFetcher(PermissionsFetcher):
+class BitbucketPermissionProjectFetcher(AbstractFetcher):
     """Bitbucket permissions fetcher class implementation."""
 
-    def __init__(
-        self,
-        session: Session,
-        wrapper: BitbucketApiWrapper,
-        config: dict,
-        only_projects: bool = False,
-    ):
-        super().__init__(session, wrapper, config)
+    def __init__(self, session: Session, wrapper: BitbucketApiWrapper, config: dict, only_projects: bool = False, parameters=None):
+        super().__init__(session, wrapper, config, parameters=parameters)
         self.only_projects = only_projects
 
     def fetch(self, repositories_query):
@@ -39,23 +33,22 @@ class BitbucketPermissionsFetcher(PermissionsFetcher):
         if not self.only_projects:
             super().fetch(repositories_query)
 
-        projects = repositories_query.join(RepositoryProject).all()
-
+        repos = repositories_query.join(RepositoryProject).all()
+        project_ids = []
         # Process projects
-        for project in projects:
+        for repo in repos:
+            project = repo.project
+            if project is None or project.id in project_ids:
+                continue
+            project_ids.append(project.id)
+
             if "~" in project.url:
-                log.debug(
-                    f"Bypassing project {project.url}, looks like a personal project"
-                )
+                log.debug(f"Bypassing project {project.url}, looks like a personal project")
                 continue
             log.debug(f"Processing project {project.key}")
             try:
-                permission_users = self.wrapper.get_project_users_permissions(
-                    project.key
-                )
-                permission_groups = self.wrapper.get_project_groups_permissions(
-                    project.key
-                )
+                permission_users = self.wrapper.get_project_users_permissions(project.key)
+                permission_groups = self.wrapper.get_project_groups_permissions(project.key)
                 project.access_denied_to_admin = False
             except AccessDeniedException:
                 log.warning(f"Cannot access project {project.url}")
@@ -68,10 +61,8 @@ class BitbucketPermissionsFetcher(PermissionsFetcher):
                 self.session.commit()
                 continue
 
-            self.process_project_permission(
-                permission_users + permission_groups, project
-            )
-            self.process_project_last_activities()
+            self.process_project_permission(permission_users + permission_groups, project)
+            self.process_project_last_activities(project)
             # Get default permission for this project
             default_permission = self.wrapper.get_project_default_permission(project)
             if project.default_permission != default_permission:
@@ -91,22 +82,23 @@ class BitbucketPermissionsFetcher(PermissionsFetcher):
             project.default_permission = default_permission
             self.session.commit()
 
-    def process_project_last_activities(self):
+    def process_project_last_activities(self, project: RepositoryProject):
         log.info("Updating last activity for projects")
-        projects = self.session.query(RepositoryProject).all()
         i = 0
         last_days = self.config.get("last_days", 1000)
-        for project in projects:
-            i += 1
-            last_activity = self.wrapper.get_project_last_activity(
-                project=project, last_days=last_days
-            )
+        i += 1
+        try:
+            last_activity = self.wrapper.get_project_last_activity(project=project, last_days=last_days)
             project.last_activity_date = last_activity
-            log.debug(f"Processing project {i}/{len(projects)}")
+        except Exception:
+            log.info(
+                f"Project id {project.id} cannot be access for last activity. URL: /rest/commitgraph/1.0/report.json?projectId="
+                f"{project.id}"
+            )
         self.session.commit()
         log.info("Last activity for projects updated")
 
-    def process_project_permission(self, permissions, project):
+    def process_project_permission(self, permissions, project: RepositoryProject):
         _permissions = []
         for permission in permissions:
             user = permission["user"] if "user" in permission else None
@@ -125,7 +117,7 @@ class BitbucketPermissionsFetcher(PermissionsFetcher):
             db_permission = (
                 self.session.query(RepositoryProjectPermission)
                 .filter(
-                    RepositoryProjectPermission.repository_project == project,
+                    RepositoryProjectPermission.repository_project_id == project.id,
                     RepositoryProjectPermission.user == db_user,
                     RepositoryProjectPermission.group == db_group,
                 )
@@ -142,9 +134,7 @@ class BitbucketPermissionsFetcher(PermissionsFetcher):
                 log.debug(f"New Permission found {db_permission.permission}")
             else:  # Permission already exists, checking if it has changed
                 if db_permission.permission.name != _perm:
-                    log.debug(
-                        f"User permission edited, from {db_permission.permission.name} to {_perm}"
-                    )
+                    log.debug(f"User permission edited, from {db_permission.permission.name} to {_perm}")
 
             if isinstance(_perm, list):
                 db_permission.permissions = _perm

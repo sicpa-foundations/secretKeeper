@@ -19,7 +19,7 @@ class CheckBranchRestriction(AbstractRepositoryChecker):
             "bypass_pull_request_allowances",
             "allow_deletions",
         ]
-        if len(repository.default_branch) == 0:
+        if repository.default_branch is None or len(repository.default_branch) == 0:
             self.notifications.append(
                 Notification(
                     repository=repository,
@@ -34,9 +34,7 @@ class CheckBranchRestriction(AbstractRepositoryChecker):
             missing_permissions = []
             if repository.default_branch != branch.name:  # check only default branch
                 continue
-            _intersection_forbidden = list(
-                set(forbidden_permissions).intersection(branch.permissions)
-            )
+            _intersection_forbidden = list(set(forbidden_permissions).intersection(branch.permissions))
             if len(_intersection_forbidden) > 0:
                 self.notifications.append(
                     Notification(
@@ -48,26 +46,14 @@ class CheckBranchRestriction(AbstractRepositoryChecker):
                     )
                 )
 
-            if (
-                config.get("min_approval", False)
-                and branch.reviewers_required_count == 0
-            ):
+            if config.get("min_approval", False) and branch.reviewers_required_count == 0:
                 missing_permissions.append("reviewers_required_count>0")
 
-            if (
-                config.get("pull_request_only", False)
-                and "pull-request-only" not in branch.permissions
-            ):
+            if config.get("pull_request_only", False) and "pull-request-only" not in branch.permissions:
                 missing_permissions.append("pull_request_only")
-            if (
-                config.get("no_deletes", False)
-                and "no-deletes" not in branch.permissions
-            ):
+            if config.get("no_deletes", False) and "no-deletes" not in branch.permissions:
                 missing_permissions.append("no_deletes")
-            if (
-                config.get("fast_forward_only", False)
-                and "fast-forward-only" not in branch.permissions
-            ):
+            if config.get("fast_forward_only", False) and "fast-forward-only" not in branch.permissions:
                 missing_permissions.append("fast_forward_only")
             log.debug(f"Missing permissions: {missing_permissions}")
             if len(missing_permissions) > 0:

@@ -10,31 +10,30 @@ log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 types_mapping = {"hcVault": HcVaultSecretSource}
 
 
-class GitLeaksVault:
+class VaultUtility:
+    secrets_data: dict = {}
+
     def generate_gitleaks_config_file(self) -> str:
-        source_config = read_config("secret_sources")
         config_file = read_config("scanner.config_file", None)
-        secrets = ""
+        _secrets = ""
+        for name, secrets in self.secrets_data.items():
+            for path, secret in secrets.items():
+                _secrets += path + "\n" + secret + "\n"
 
-        for source_name, source_data in source_config.items():
-            if source_data.get("enabled", False):
-                log.info(f"Reading secrets from vault {source_name}")
-                secrets += self.read_and_write_hc_vault(source_name, source_data)
+            log.info(f"Read {len(secrets.keys())} secrets from {name}")
 
-        data = secrets.split("\n")[:-1]
+        data = _secrets.split("\n")[:-1]
         i = 0
         config = ""
         while i < len(data):
             line = data[i].replace("\n", "")
-            secret = regex.escape(data[i + 1].rstrip().replace("\n", "")).replace(
-                '"\\"', '"\\"'
-            )
+            secret = regex.escape(data[i + 1].rstrip().replace("\n", "")).replace('"\\"', '"\\"')
             config += f"""
-    [[rules]]
-    description = "{line}"
-    id = "{line}"
-    regex = '''{secret}'''
-    tags = ["secret", "input","vault"]
+[[rules]]
+description = "{line}"
+id = "{line}"
+regex = '''{secret}'''
+tags = ["secret", "input", "vault"]
             """
             i += 2
         if config_file is not None:
@@ -51,18 +50,29 @@ class GitLeaksVault:
             r.write(config)
         return filename
 
-    def read_and_write_hc_vault(self, name: str, config: dict) -> str:
+    def read_secrets_from_all_vault(self):
+        source_config = read_config("secret_sources")
+        secrets = {}
+
+        for source_name, source_data in source_config.items():
+            if source_data.get("enabled", False):
+                log.info(f"Reading secrets from vault {source_name}")
+                if source_name in secrets:
+                    log.error(f"Source {source_name} already exists, skipping")
+                    continue
+                secrets[source_name] = self.read_hc_vault(source_name, source_data)
+                log.info(f"Number of secrets loaded: {len(secrets[source_name])}")
+
+        self.secrets_data = secrets
+
+    def read_hc_vault(self, name: str, config: dict) -> dict:
         source_type = config.get("type")
         if source_type not in types_mapping.keys():
-            raise ValueError(
-                f"Source of type {source_type} is unknown for source {name}"
-            )
+            raise ValueError(f"Source of type {source_type} is unknown for source {name}")
 
         hc_api = types_mapping[source_type](config)
         secrets = hc_api.get_secrets()
-        result = ""
-        for path, secret in secrets.items():
-            result += path + "\n" + secret + "\n"
+        return secrets
 
-        log.info(f"Read {len(secrets.keys())} secrets from {hc_api.url}")
-        return result
+
+global_vault_utility = VaultUtility()

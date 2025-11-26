@@ -16,11 +16,7 @@ class CheckNoExternalUserAccessConfidentialProject(AbstractProjectChecker):
             return
 
         for permission in project.permissions:
-            if (
-                permission.user is not None
-                and permission.permissions is not None
-                and permission.user.is_external_user(external_groups)
-            ):
+            if permission.user is not None and permission.permissions is not None and permission.user.is_external_user(external_groups):
                 self.notifications.append(
                     Notification(
                         project=project,
@@ -30,3 +26,6 @@ class CheckNoExternalUserAccessConfidentialProject(AbstractProjectChecker):
                         notified=not config["notification"],
                     )
                 )
+
+    def enforce_rule(self, project, session, config):
+        pass

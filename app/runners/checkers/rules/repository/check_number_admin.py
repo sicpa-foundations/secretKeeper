@@ -16,10 +16,7 @@ class CheckNumberAdmin(AbstractRepositoryChecker):
             if (
                 permission.user_id is not None
                 and permission.permissions is not None
-                and (
-                    PermissionEnum.REPO_ADMIN in permission.permissions
-                    or "admin" in permission.permissions
-                )
+                and (PermissionEnum.REPO_ADMIN in permission.permissions or "admin" in permission.permissions)
             ):
                 count_admin_users += 1
 

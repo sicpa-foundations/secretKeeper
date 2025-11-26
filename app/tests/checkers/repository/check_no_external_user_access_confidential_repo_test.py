@@ -9,7 +9,7 @@ def test_positive_admin_is_external(db_session, make_user, make_repo, make_repo_
     make_repo_permission(repository=repo, user=external_user, permissions=[PermissionEnum.REPO_READ])
     make_repo_permission(repository=repo, user=internal_user, permissions=[PermissionEnum.REPO_READ])
 
-    checker = CheckNoExternalUserAccessConfidentialRepo()
+    checker = CheckNoExternalUserAccessConfidentialRepo(None)
     checker.check(repo, db_session, {"notification": True})
 
     assert len(checker.notifications) == 1

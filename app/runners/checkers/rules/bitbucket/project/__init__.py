@@ -19,6 +19,9 @@ from app.runners.checkers.rules.bitbucket.project.check_permissions_read import 
 from app.runners.checkers.rules.bitbucket.project.check_permissions_write import (
     CheckPermissionsWrite,
 )
+from app.runners.checkers.rules.bitbucket.project.check_webhook import (
+    CheckWebHook,
+)
 
 __all__ = [
     "CheckAccessToAdmin",
@@ -28,4 +31,5 @@ __all__ = [
     "CheckPermissionsRead",
     "CheckPermissionsAdmin",
     "CheckPermissionsWrite",
+    "CheckWebHook",
 ]

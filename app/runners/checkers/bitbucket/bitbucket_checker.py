@@ -1,16 +1,16 @@
-import logging
 import json
+import logging
 
 from app.runners.checkers.abstract_checker import AbstractChecker
 from app.runners.checkers.rules.bitbucket.project.abstract_project_checker import (
     AbstractProjectChecker,
 )
+from app.utils.notifications import process_notification
 from app.utils.tools import read_config
 from common.models.repository import Repository
 from common.models.repository_project import (
     RepositoryProject,
 )
-from app.utils.notifications import process_notification
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -29,11 +29,7 @@ class BitbuckeChecker(AbstractChecker):
         if repo_url is not None:
             filters.append(Repository.url_http == repo_url)
         projects = (
-            self.session.query(RepositoryProject)
-            .join(Repository)
-            .filter(RepositoryProject.type != "PERSONAL")
-            .filter(*filters)
-            .all()
+            self.session.query(RepositoryProject).join(Repository).filter(RepositoryProject.type != "PERSONAL").filter(*filters).all()
         )
         i = 1
         checkers = read_config("best_practices.project")
@@ -45,9 +41,7 @@ class BitbuckeChecker(AbstractChecker):
             notifications = []
 
             for clazz in AbstractProjectChecker.__subclasses__():
-                notifications += self.process_checker_clazz(
-                    clazz, checkers, project, self.session
-                )
+                notifications += self.process_checker_clazz(clazz, checkers, project, self.session)
 
             for notification in notifications:
                 process_notification(notification, self.session)

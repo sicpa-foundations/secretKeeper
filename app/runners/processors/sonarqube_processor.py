@@ -37,9 +37,7 @@ class SonarQubeProcessor(AbstractProcessor):
                 if group_id_node is None:
                     _group_id_node = root.find("xmlns:parent", namespaces=namespaces)
                     if _group_id_node is not None:
-                        group_id_node = _group_id_node.find(
-                            "xmlns:groupId", namespaces=namespaces
-                        )
+                        group_id_node = _group_id_node.find("xmlns:groupId", namespaces=namespaces)
                     if group_id_node is not None:
                         group_id = group_id_node.text
                 else:

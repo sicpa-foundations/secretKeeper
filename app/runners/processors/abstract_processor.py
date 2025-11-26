@@ -10,9 +10,7 @@ log = logging.getLogger(__name__)
 
 
 class AbstractProcessor(ABC):
-    def __init__(
-        self, session: Session, repo: Repository, git_api_wrapper: AbstractGitApiWrapper
-    ):
+    def __init__(self, session: Session, repo: Repository, git_api_wrapper: AbstractGitApiWrapper):
         self.session = session
         self.repo = repo
         self.git_api_wrapper = git_api_wrapper
