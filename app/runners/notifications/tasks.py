@@ -4,13 +4,14 @@ import jinja2
 from sqlalchemy import false
 from sqlalchemy.orm import Session
 
+from app.celery_app import app_name
 from app.common.notification.microsoft_teams_notification import (
     MicrosoftTeamsNotification,
 )
 from app.config import EMAIL_FOLDER
+from app.utils.tools import read_config, send_mail
 from common.models.basemodel import engine
 from common.models.notifications import Notification
-from app.utils.tools import read_config, send_mail
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -28,15 +29,18 @@ def process_notifications(dry=False):
         send_email = read_config("notifications.email.enabled")
         send_teams = read_config("notifications.teams.enabled")
 
-        subject = "SecretKeeper: New issues found"
+        subject = f"{app_name}: New issues found"
 
         grouped_notifications = {}
         for notification in notifications:
-
-            title = (
-                f"{notification.project.name if notification.project is not None else ''}"
-                f"{notification.repository.name if notification.repository is not None else ''}"
-            )
+            title = ""
+            if notification.project is not None:
+                title = f"{notification.project.name}"
+            if notification.repository is not None:
+                if notification.repository.project is not None:
+                    title = f"{notification.repository.project.name} / {notification.repository.name}"
+                else:
+                    title = f"{notification.repository.name}"
 
             if title not in grouped_notifications.keys():
                 url = (

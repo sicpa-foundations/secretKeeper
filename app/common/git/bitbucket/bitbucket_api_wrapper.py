@@ -7,12 +7,17 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.common.api.bitbucket_api import BitBucketApi
-from app.common.git.abstract_git_data import AbstractGitData
+from app.common.exceptions.pr_participant_not_found import PRParticipantNotFound
+from app.common.exceptions.repo_not_found_exception import RepoNotFoundException
 from app.common.git.abstract_git_api_wrapper import AbstractGitApiWrapper
+from app.common.git.abstract_git_data import AbstractGitData
+from app.config import BITBUCKET_ACCESS_USERNAME
+from app.utils.tools import read_config
 from common.models.basemodel import engine
 from common.models.repository import Repository
-from app.utils.tools import read_config
 from common.models.repository_project import RepositoryProject
+
+log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class BitbucketApiWrapper(AbstractGitApiWrapper):
@@ -28,13 +33,13 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
         return self.api.get_projects(all=True)
 
     def clone(self, branch="master") -> Optional[str]:
-        if self.path is not None:
-            raise RuntimeError(f"Repository has already been cloned to {self.path}")
         url = self.get_repository().url_http
         path = read_config("scanner.tmp_git_folder") + url.split("/")[-1].replace(".git", "")
-        if not os.path.exists(path):
+        if os.path.exists(path):
+            log.debug(f"Repository has already been cloned to {path}")
+        else:
             os.makedirs(path)
-        logging.debug("Cloning repo...")
+        self.log.debug("Cloning repo...")
         ssh = self.source.config.get("ssh")
         private_key = ssh.get("private_key")
         ssh_args = ""
@@ -99,7 +104,7 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
             self.repo = repo
             self.repo_from_db = True
         else:
-            logging.warning(f"Error while fetching repository {_url}")
+            self.log.warning(f"Error while fetching repository {_url}")
 
         return repo
 
@@ -208,7 +213,8 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
             return {}
         try:
             branches = self.api.get_branch_permissions(self.repo.project.key, repo.slug)
-            hooks = self.api.get_hooks(self.repo.project.key, repo.slug)
+            project_hooks = self.api.get_hooks_for_project(self.repo.project.key)
+            repo_hooks = self.api.get_hooks_for_repo(self.repo.project.key, repo.slug)
             branching_model = self.api.get_branch_model(self.repo.project.key, repo.slug)
             # displayId = "Development" and not "develop" in this case
             if "development" in branching_model.keys():
@@ -225,20 +231,24 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
                         {},
                     )
                 ] = "Production"
+        except RepoNotFoundException as e:
+            raise e
         except Exception as e:
-            logging.exception(e)
+            self.log.warning(e)
             return {}
         result = {}
         # Get all types that are enabled, related to the repo (ex: PRE_PULL_REQUEST_MERGE)
-        types = list(
-            map(
-                lambda x: x["details"]["type"],
-                list(
-                    filter(
-                        lambda attr: attr.get("enabled", False),
-                        hooks,
-                    )
-                ),
+        has_reviewers_required = len(
+            list(
+                map(
+                    lambda x: x["details"]["name"],
+                    list(
+                        filter(
+                            lambda attr: attr.get("enabled", False) and attr["details"]["name"] == "Minimum approvals",
+                            project_hooks + repo_hooks,
+                        )
+                    ),
+                )
             )
         )
         # Get all permissions related to the branch (ex: read-only)
@@ -286,7 +296,7 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
             ),
         )
 
-        result["reviewers_required_count"] = int("PRE_PULL_REQUEST_MERGE" in types)
+        result["reviewers_required_count"] = has_reviewers_required
 
         return result
 
@@ -297,7 +307,7 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
         try:
             branches = self.api.get_branches(self.repo.project.key, repo.slug)
         except Exception as e:
-            logging.warning(e)
+            self.log.warning(e)
             return None
         default_branch: dict = next((x for x in branches if x["isDefault"]), {})
 
@@ -307,7 +317,7 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
         try:
             data = self.api.get_repo_branch_permissions(repo)
         except Exception as e:
-            logging.warning(e)
+            self.log.warning(e)
             return []
         items = []
         for item in data:
@@ -354,3 +364,43 @@ class BitbucketApiWrapper(AbstractGitApiWrapper):
         last_adds = self._get_last_commit_date(_json.get("adds", {}), last_days=last_days)
         last_coms = self._get_last_commit_date(_json.get("coms", {}), last_days=last_days)
         return max([last_dels, last_adds, last_coms])
+
+    def get_webhooks_for_project(self, project_key: str) -> List[dict]:
+        try:
+            return self.api.get_webhooks_for_project(project_key)
+        except Exception as e:
+            self.log.warning(e)
+            return []
+
+    def set_webhooks_for_project_on_pr(self, project_key: str, wh_name: str, wh_url: str) -> list[dict]:
+        return self.api.set_hooks_for_project_on_pr(project_key, wh_name, wh_url)
+
+    def update_pr_review_status(self, project_key, repo, pr_id, user_slug, status, recursive=True):
+        try:
+            participants = self.api.get_pr_reviewer_status(project_key, repo, pr_id)
+            status_changed = status != "UNAPPROVED"
+            for participant in participants:
+                user = participant.get("user", {})
+                if user.get("name") == BITBUCKET_ACCESS_USERNAME and participant.get("status") != status:
+                    status_changed = True
+
+            if status_changed:
+                self.api.update_pr_review_status(project_key, repo, pr_id, user_slug, status)
+        except PRParticipantNotFound:
+            self.api.add_participant_to_pr(project_key, repo, pr_id, user_slug)
+            if recursive:
+                self.update_pr_review_status(project_key, repo, pr_id, user_slug, status, recursive=False)
+        except Exception as e:
+            self.log.exception(e)
+
+    def update_task_status(self, task_id, status):
+        try:
+            self.api.api.update_task(task_id, state=status, text="This secret has been removed, hurrah !")
+        except Exception as e:
+            self.log.exception(e)
+
+    def update_comment_pr_state(self, project_key, repo, pr_id, comment_id, version, state):
+        try:
+            self.api.api.update_comment_pr_state(project_key, repo, pr_id, comment_id, version, state)
+        except Exception as e:
+            self.log.exception(e)

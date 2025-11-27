@@ -11,16 +11,12 @@ from common.models.repository_project import RepositoryProject
 
 
 class AbstractGitApiWrapper(ABC):
-    repo = None
-    log = None
-    url = None
-    api = None
-    source = None
-    directory_path = None
-    repo_from_db = False
-    report_path = None
-
     def __init__(self, source: AbstractGitData, repo_db=None, url=None):
+        self.api = None
+        self.directory_path = None
+        self.repo_from_db = False
+        self.report_path = None
+
         self.repo = repo_db
         self.url = url
         self.source = source
@@ -107,4 +103,12 @@ class AbstractGitApiWrapper(ABC):
 
     @abstractmethod
     def get_repository_last_activities(self, repository: Repository, last_days: int = 10) -> date:
+        pass
+
+    @abstractmethod
+    def get_webhooks_for_project(self, project_key: str) -> list[dict]:
+        pass
+
+    @abstractmethod
+    def set_webhooks_for_project_on_pr(self, project_key: str, wh_name: str, wh_url: str) -> list[dict]:
         pass

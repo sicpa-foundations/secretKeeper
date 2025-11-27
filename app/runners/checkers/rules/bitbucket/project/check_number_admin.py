@@ -2,8 +2,8 @@ from app.runners.checkers.rules.bitbucket.project.abstract_project_checker impor
     AbstractProjectChecker,
 )
 from common.models.notification_enum import NotificationEnum
-from common.models.permission_enum import PermissionEnum
 from common.models.notifications import Notification
+from common.models.permission_enum import PermissionEnum
 
 
 class CheckNumberAdmin(AbstractProjectChecker):
@@ -13,10 +13,7 @@ class CheckNumberAdmin(AbstractProjectChecker):
         count_admin_users = 0
 
         for permission in project.permissions:
-            if (
-                permission.user_id is not None
-                and permission.permission == PermissionEnum.PROJECT_ADMIN
-            ):
+            if permission.user_id is not None and permission.permission == PermissionEnum.PROJECT_ADMIN:
                 count_admin_users += 1
 
         # Check number of admins
@@ -29,3 +26,6 @@ class CheckNumberAdmin(AbstractProjectChecker):
                     notified=not config["notification"],
                 )
             )
+
+    def enforce_rule(self, project, session, config):
+        pass

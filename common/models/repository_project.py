@@ -2,8 +2,8 @@ import sqlalchemy as db
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import ScalarListType
 
+from common.models.basemodel import BaseModel
 from common.models.permission_enum import PermissionEnum
-from common.models.basemodel import BaseModel, base
 
 
 class RepositoryProject(BaseModel):
@@ -18,15 +18,14 @@ class RepositoryProject(BaseModel):
     default_permission = db.Column(db.String(255))
     classification = db.Column(db.Integer)
     classification_reason = db.Column(db.Text)
-    permissions = relationship(
-        "RepositoryProjectPermission", back_populates="repository_project"
-    )
+    permissions = relationship("RepositoryProjectPermission", back_populates="repository_project")
     repositories = relationship("Repository", back_populates="project")
     access_denied_to_admin = db.Column(db.Boolean, unique=False, default=False)
     deleted = db.Column(db.Boolean, unique=False, default=False)
     archived = db.Column(db.Boolean, unique=False, default=False)
     compliant = db.Column(db.Boolean, unique=False, default=True)
     compliance_reason = db.Column(db.JSON)
+    webhooks = db.Column(db.ARRAY(db.String))
 
     last_activity_date = db.Column(db.Date)
 

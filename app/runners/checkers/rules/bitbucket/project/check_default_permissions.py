@@ -19,3 +19,6 @@ class CheckDefaultPermissions(AbstractProjectChecker):
                     notified=not config["notification"],
                 )
             )
+
+    def enforce_rule(self, project, session, config):
+        pass

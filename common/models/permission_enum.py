@@ -2,6 +2,7 @@ import enum
 
 
 class PermissionEnum(enum.Enum):
+    REPO_CREATE = 12
     PROJECT_VIEW = 10
     REPO_READ = 0
     REPO_WRITE = 1

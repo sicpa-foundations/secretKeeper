@@ -1,11 +1,9 @@
-import datetime
-
 import dateparser
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from common.config import SQLALCHEMY_DATABASE_URI
-from common.models.basemodel import SessionGD, base, engine
+from common.models.basemodel import base
 from common.models.gitleaks import Gitleak
 from common.models.repository import Repository
 from common.models.repository_permission import RepositoryPermission
@@ -13,25 +11,27 @@ from common.models.user import User
 
 TEST_DB_NAME = "testdb"
 
+TEST_DATABASE_URL = "postgresql+psycopg2://postgres:localpassword@localhost:5432/test"
+
 
 @pytest.fixture(scope="session")
-def connection(request):
-    # Modify this URL according to your database backend
+def engine():
+    """Create a PostgreSQL engine for tests."""
+    engine = create_engine(TEST_DATABASE_URL)
+    return engine
 
-    engine = create_engine(SQLALCHEMY_DATABASE_URI)
+
+@pytest.fixture(scope="session")
+def connection(engine):
+    """Establish a single shared connection for all tests."""
     connection = engine.connect()
-
-    return connection
+    yield connection
+    connection.close()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_db(connection, request):
-    """Setup test database.
-
-    Creates all database tables as declared in SQLAlchemy models,
-    then proceeds to drop all the created tables after all tests
-    have finished running.
-    """
+def setup_db(engine, connection, request):
+    """Create all tables once per test session, drop after tests."""
     base.metadata.bind = connection
     base.metadata.create_all(engine)
 
@@ -41,13 +41,13 @@ def setup_db(connection, request):
     request.addfinalizer(teardown)
 
 
-@pytest.fixture(scope="session")
-def db_session():
-    session = SessionGD()
+@pytest.fixture(scope="function")
+def db_session(engine):
+    """Provide a clean transactional session for each test."""
+    _session = sessionmaker(bind=engine)
+    session = _session()
     yield session
-    session.rollback()
     session.close()
-
 
 @pytest.fixture()
 def make_user(db_session):
@@ -119,7 +119,9 @@ def make_leak_processor(db_session):
 
         if config is None:
             config = {"type": "bitbucket", "enabled": True, "url": "http://test"}
-        leaks_processor = LeaksProcessor(BitBucketGitService(config, session=db_session), full_mode=full_mode)
+        leaks_processor = LeaksProcessor(
+            BitBucketGitService(config, session=db_session), full_mode=full_mode
+        )
 
         return leaks_processor
 

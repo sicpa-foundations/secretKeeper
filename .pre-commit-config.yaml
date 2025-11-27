@@ -1,5 +1,5 @@
 repos:
-  - repo: https://gitlab.com/pycqa/flake8
+  - repo: https://github.com/pycqa/flake8
     rev: 5.0.4
     hooks:
       - id: flake8
@@ -8,4 +8,5 @@ repos:
     rev: 22.6.0
     hooks:
       - id: black
+        args: ["--config", "pyproject.toml"]
         exclude: (^api/migrations/|app/tests|api/tests)

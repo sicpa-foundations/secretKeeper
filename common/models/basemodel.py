@@ -23,6 +23,12 @@ engine = create_engine(SQLALCHEMY_DATABASE_URI)
 SessionGD = sessionmaker(engine)
 
 
+class BaseModelNoId(base):
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    __abstract__ = True
+
+
 class BaseModel(base):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

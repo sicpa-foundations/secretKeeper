@@ -5,7 +5,7 @@ secret.txt
 .DS_Store
 __pycache__
 reports/*.json
-.env.app
+.env.*
 .env.rabbitmq
 .env.app.local
 .env.app.production

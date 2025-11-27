@@ -2,6 +2,7 @@ import logging
 
 from sqlalchemy import and_
 
+from app.common.exceptions.repo_not_found_exception import RepoNotFoundException
 from app.runners.fetchers.abstract_fetcher import AbstractFetcher
 from common.models.repository import Repository, RepositoryBranch
 
@@ -24,31 +25,34 @@ class BranchesFetcher(AbstractFetcher):
         """Fetch branch permissions for a repository."""
         log.info(f"[Branches] Fetching branch permissions for repo {repo.slug}")
         self.wrapper.repo = repo
-        default_branch = self.wrapper.get_default_branch()
-        if default_branch is None:
-            log.error(f"[Branches] Default branch not found for repo {repo.slug}")
-            return
-        branch_permissions = self.wrapper.get_branch_permissions(default_branch)
-        rb = (
-            self.session.query(RepositoryBranch)
-            .filter(
-                and_(
-                    RepositoryBranch.repository_id == repo.id,
-                    RepositoryBranch.name == default_branch,
-                ),
+        try:
+            default_branch = self.wrapper.get_default_branch()
+            if default_branch is None:
+                log.debug(f"[Branches] Default branch not found for repo {repo.slug}")
+                return
+            branch_permissions = self.wrapper.get_branch_permissions(default_branch)
+            rb = (
+                self.session.query(RepositoryBranch)
+                .filter(
+                    and_(
+                        RepositoryBranch.repository_id == repo.id,
+                        RepositoryBranch.name == default_branch,
+                    ),
+                )
+                .first()
             )
-            .first()
-        )
-        if rb is None:
-            rb = RepositoryBranch(name=default_branch, repository_id=repo.id)
-            self.session.add(rb)
+            if rb is None:
+                rb = RepositoryBranch(name=default_branch, repository_id=repo.id)
+                self.session.add(rb)
 
-        rb.users = branch_permissions.get("bypass_users", [])
-        rb.groups = branch_permissions.get("bypass_teams", [])
-        rb.reviewers_required_count = branch_permissions.get(
-            "reviewers_required_count", 0
-        )
-        rb.permissions = branch_permissions.get("permissions", [])
-        self.session.merge(repo)
-        repo.default_branch = default_branch
-        self.session.commit()
+            rb.users = branch_permissions.get("bypass_users", [])
+            rb.groups = branch_permissions.get("bypass_teams", [])
+            rb.reviewers_required_count = branch_permissions.get("reviewers_required_count", 0)
+            rb.permissions = branch_permissions.get("permissions", [])
+            self.session.merge(repo)
+            repo.default_branch = default_branch
+            self.session.commit()
+        except RepoNotFoundException:
+            log.info(f"[Branches] Repo {repo.slug} not found, marking as deleted")
+            repo.deleted = True
+            self.session.commit()

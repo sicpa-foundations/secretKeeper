@@ -8,8 +8,8 @@ services:
       - .env
       - .env.rabbitmq
     volumes:
-      - /opt/gitdefender/config:/config
-      - /opt/gitdefender/logs:/data/logs
+      - /opt/secretkeeper/config:/config
+      - /opt/secretkeeper§/logs:/data/logs
     depends_on:
       - rabbit
     networks:

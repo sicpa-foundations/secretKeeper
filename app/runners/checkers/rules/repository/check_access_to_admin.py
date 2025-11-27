@@ -1,3 +1,4 @@
+from app.celery_app import app_name
 from app.runners.checkers.rules.repository.abstract_repository_checker import (
     AbstractRepositoryChecker,
 )
@@ -13,7 +14,7 @@ class CheckAccessToAdmin(AbstractRepositoryChecker):
             self.notifications.append(
                 Notification(
                     repository=repository,
-                    content=f"Repo {repository.name}: SecretKeeper doesn't have ADMIN access",
+                    content=f"Repo {repository.name}: {app_name} doesn't have ADMIN access",
                     type=NotificationEnum.COMPLIANCE,
                     notified=not config["notification"],
                 )

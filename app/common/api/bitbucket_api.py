@@ -2,8 +2,10 @@ import logging
 from datetime import datetime, timedelta
 
 import requests
+from atlassian import Bitbucket
 
 from app.common.exceptions.access_denied_exception import AccessDeniedException
+from app.common.exceptions.pr_participant_not_found import PRParticipantNotFound
 from app.common.exceptions.repo_not_found_exception import RepoNotFoundException
 from app.common.exceptions.request_exception import RequestException
 
@@ -19,13 +21,14 @@ class BitBucketApi:
     def __init__(self, url, token=None):
         self.url = url
         self.token = token
+        self.api = Bitbucket(url=url, token=self.token)
 
     def _get(self, path, params, count=False, only_data=True, all=False):
         headers = {}
         if self.token:
             headers = {"Authorization": BEARER + self.token}
         if count:
-            _next = 10
+            _next = 0
             i = 0
             while _next is not None:
                 params["limit"] = 100
@@ -72,15 +75,17 @@ class BitBucketApi:
                 "X-Atlassian-Token": "no-check",
             }
         r = requests.post(self.url + path, json=params, headers=headers, allow_redirects=True)
-        if r.status_code == 401:
-            self.log.warning(f"Error GET request {self.url + path} with params {params}: {r.text}")
-            raise AccessDeniedException(f"Error GET request {self.url + path} with params {params}, status: {r.status_code}")
-        elif r.status_code == 200:
-            return r.json()
-        elif r.status_code == 204:
-            return None
-        self.log.warning(f"Error POST request {self.url + path} with params {params}: {r.status_code} - {r.text}")
-        raise RequestException(f"Error POST request {self.url + path} with params {params}")
+        return self._process_response(r, path, params)
+
+    def _put(self, path, params):
+        headers = {}
+        if self.token:
+            headers = {
+                "Authorization": BEARER + self.token,
+                "X-Atlassian-Token": "no-check",
+            }
+        r = requests.put(self.url + path, json=params, headers=headers, allow_redirects=True)
+        self._process_response(r, path, params)
 
     def _delete(self, path, params):
         headers = {}
@@ -90,14 +95,20 @@ class BitBucketApi:
                 "X-Atlassian-Token": "no-check",
             }
         r = requests.delete(self.url + path, json=params, headers=headers, allow_redirects=True)
+        self._process_response(r, path, params)
+
+    def _process_response(self, r, path, params):
         if r.status_code == 401:
             self.log.warning(f"Error GET request {self.url + path} with params {params}: {r.text}")
             raise AccessDeniedException(f"Error GET request {self.url + path} with params {params}, status: {r.status_code}")
-        elif r.status_code == 404:
-            raise RepoNotFoundException(f"Page {self.url + path} doesn't exist anymore")
-        elif r.status_code != 204:
-            self.log.warning(f"Error POST request {self.url + path} with params {params}")
-            raise RequestException(f"Error POST request {self.url + path} with params {params}")
+        elif r.status_code in [200, 201]:
+            return r.json()
+        elif r.status_code == 204:
+            return None
+        elif r.status_code == 404 and "NoSuchParticipantException" in r.text:
+            raise PRParticipantNotFound(r.text)
+        self.log.warning(f"Error request {self.url + path} with params {params}: {r.status_code} - {r.text}")
+        raise RequestException(f"Error request {self.url + path} with params {params}")
 
     def get_repos(
         self,
@@ -109,7 +120,11 @@ class BitBucketApi:
     ):
         return self._get(
             self.api_path + "repos",
-            {"visibility": visibility, "limit": limit},
+            {
+                "visibility": visibility,
+                "limit": limit,
+                "archived": "ALL",
+            },
             count=count,
             only_data=only_data,
             all=all,
@@ -143,6 +158,55 @@ class BitBucketApi:
 
     def get_builds(self, commit):
         return self._get(f"/rest/build-status/1.0/commits/{commit}", params={})
+
+    def get_diff_commits(self, project_key, repo, hash_oldest, hash_newest, path=""):
+        return list(self.api.get_diff(project_key, repo, path, hash_oldest, hash_newest))
+
+    def add_pr_comment(self, project_key, repo, pr_id, payload):
+        return self._post(
+            f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/comments",
+            params=payload,
+        )
+
+    def add_pr_task_to_comment(self, project_key, repo, pr_id, payload):
+        return self._post(
+            f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/blocker-comments",
+            params=payload,
+        )
+
+    def remove_pr_comment(self, project_key, repo, pr_id, comment_id, version):
+        return self.api.delete_pull_request_comment(project_key, repo, pr_id, comment_id, version)
+
+    def get_pr_comment(self, project_key, repo, pr_id, path):
+        return self._get(
+            f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/comments",
+            params={"path": path},
+        )
+
+    def get_pr_activities(self, project_key, repo, pr_id):
+        return list(self.api.get_pull_requests_activities(project_key, repo, pr_id))
+
+    def update_pr_review_status(self, project_key, repo, pr_id, user_slug, status):
+        return self._put(
+            f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/participants/{user_slug}",
+            params={
+                "user": {"name": user_slug},
+                "approved": status == "APPROVED",
+                "status": status,
+            },
+        )
+
+    def get_pr_reviewer_status(self, project_key, repo, pr_id):
+        return self._get(f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/participants", params={})
+
+    def update_comment_pr_state(self, project_key, repo, pr_id, comment_id, version, state, text=None):
+        return self._put(
+            f"/rest/api/1.0/projects/{project_key}/repos/{repo}/pull-requests/{pr_id}/comments/{comment_id}",
+            params={"state": state, "version": version, "text": text},
+        )
+
+    def add_participant_to_pr(self, project_key, repo, pr_id, user_slug):
+        return self.api.assign_pull_request_participant_role(project_key, repo, pr_id, "REVIEWER", user_slug)
 
     def get_branch_permissions(
         self,
@@ -185,7 +249,49 @@ class BitBucketApi:
             all=False,
         ).json()
 
-    def get_hooks(
+    def get_webhooks_for_project(
+        self,
+        project_key,
+        limit=100,
+        count=False,
+        only_data=True,
+    ):
+        return self._get(
+            f"/rest/api/1.0/projects/{project_key}/webhooks",
+            {"limit": limit},
+            count=count,
+            only_data=only_data,
+        )
+
+    def set_hooks_for_project_on_pr(
+        self,
+        project_key,
+        wh_name,
+        wh_url,
+    ):
+        events = ["pr:opened", "pr:modified", "pr:from_ref_updated", "repo:forked"]
+
+        payload = {"name": wh_name, "url": wh_url, "events": events, "active": True}
+        return self._post(
+            f"/rest/api/1.0/projects/{project_key}/webhooks",
+            payload,
+        )
+
+    def get_hooks_for_project(
+        self,
+        project_key,
+        limit=100,
+        count=False,
+        only_data=True,
+    ):
+        return self._get(
+            f"/rest/api/1.0/projects/{project_key}/settings/hooks",
+            {"limit": limit},
+            count=count,
+            only_data=only_data,
+        )
+
+    def get_hooks_for_repo(
         self,
         project_key,
         repo,

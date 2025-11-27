@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Repository Forked</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.5;
+      color: #333;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+    }
+    h2 {
+      color: #f0ad4e;
+    }
+    .button {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 15px 0;
+      font-size: 14px;
+      color: #fff;
+      background-color: #0275d8;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+    .details {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .details dt {
+      font-weight: bold;
+    }
+    .details dd {
+      margin: 0 0 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🍴 Repository Forked</h2>
+    <p>Hello Security Team,</p>
+    <p>A repository has just been <strong>forked</strong> in Bitbucket:</p>
+
+    <dl class="details">
+      <dt>Source Repository:</dt>
+      <dd>{{SOURCE_REPO_NAME}} (Project: {{SOURCE_PROJECT_KEY}})</dd>
+
+      <dt>New Fork:</dt>
+      <dd>{{FORK_REPO_NAME}} (Project: {{FORK_PROJECT_KEY}})</dd>
+
+      <dt>Forked By:</dt>
+      <dd>{{USER_NAME}} &lt;{{USER_EMAIL}}&gt;</dd>
+
+      <dt>Time:</dt>
+      <dd>{{TIMESTAMP}}</dd>
+    </dl>
+
+    <a href="{{FORK_REPO_LINK}}" class="button" style="color:white">View Forked Repository</a>
+
+    <p>Please verify if this fork is legitimate.</p>
+
+    <p>Thank you,<br></p>
+  </div>
+</body>
+</html>

@@ -17,10 +17,11 @@ class GithubFetcher(AbstractFetcher):
 
     def fetch(self, repositories_query):
         """Get all data from Github."""
-        for org in self.get_organizations():
-            self.get_teams(org)
-            self.get_repositories(org)
-            self.get_users(org)
+        if self.parameters.process_new_elements:
+            for org in self.get_organizations():
+                self.get_teams(org)
+                self.get_repositories(org)
+                self.get_users(org)
         self.session.commit()
 
     def get_repositories(self, organization: GhOrganization) -> List[Repository]:
@@ -58,11 +59,11 @@ class GithubFetcher(AbstractFetcher):
                     source="github",
                 )
                 self.session.add(repos_db)
-                logging.info(f"Adding repository {repos_db.name}")
+                log.info(f"Adding repository {repos_db.name}")
                 count += 1
                 repositories.append(repos_db)
                 if count > 0:
-                    logging.info(f"{count} repositories have been added")
+                    log.info(f"{count} repositories have been added")
                 self.session.commit()
 
         return repositories
@@ -73,11 +74,7 @@ class GithubFetcher(AbstractFetcher):
         orgs = self.wrapper.api.get_user().get_orgs()
         organizations = []
         for org in orgs:
-            organization = (
-                self.session.query(GhOrganization)
-                .filter(GhOrganization.login == org.login)
-                .first()
-            )
+            organization = self.session.query(GhOrganization).filter(GhOrganization.login == org.login).first()
             if organization is None:
                 organization = GhOrganization(
                     avatar_url=org.avatar_url,
@@ -96,7 +93,7 @@ class GithubFetcher(AbstractFetcher):
                     two_factor_requirement_enabled=org.two_factor_requirement_enabled,
                     total_private_repos=org.total_private_repos,
                 )
-                logging.info(f"Adding organization {org.login}")
+                log.info(f"Adding organization {org.login}")
                 self.session.add(organization)
             organizations.append(organization)
         return organizations
@@ -107,11 +104,7 @@ class GithubFetcher(AbstractFetcher):
         log.info(f"Importing Github Teams for org {org.name}")
         teams = []
         for team in org.get_teams():
-            _team = (
-                self.session.query(Group)
-                .filter(Group.source == "github", Group.remote_id == team.id)
-                .first()
-            )
+            _team = self.session.query(Group).filter(Group.source == "github", Group.remote_id == team.id).first()
 
             count = 0
 
@@ -124,12 +117,12 @@ class GithubFetcher(AbstractFetcher):
                 )
                 team.get_members()
                 self.session.add(_team)
-                logging.info(f"Adding team {_team.name}")
+                log.info(f"Adding team {_team.name}")
                 count += 1
 
             teams.append(_team)
             if count > 0:
-                logging.info(f"{count} teams have been added")
+                log.info(f"{count} teams have been added")
             users = []
             for user in team.get_members():
                 _user = self._add_user(user)
@@ -140,11 +133,7 @@ class GithubFetcher(AbstractFetcher):
 
     def _add_user(self, user: NamedUser) -> User:
         """Add user to the database."""
-        _user = (
-            self.session.query(User)
-            .filter(User.source == "github", User.remote_id == user.id)
-            .first()
-        )
+        _user = self.session.query(User).filter(User.source == "github", User.remote_id == user.id).first()
 
         if _user is None:
             _user = User(
@@ -155,7 +144,7 @@ class GithubFetcher(AbstractFetcher):
                 emailAddress=user.email,
             )
             self.session.add(_user)
-            logging.info(f"Adding user {_user.slug}")
+            log.info(f"Adding user {_user.slug}")
         return _user
 
     def get_users(self, organization: GhOrganization):

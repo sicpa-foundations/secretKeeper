@@ -1,12 +1,9 @@
-import logging
-
-from app.common.git.github.github_git_data import GithubGitData
 from app.common.git.abstract_git_service import AbstractGitService
 from app.common.git.github.github_api_wrapper import GithubApiWrapper
+from app.common.git.github.github_git_data import GithubGitData
 from app.runners.checkers.github.github_checker import GithubChecker
+from app.runners.fetchers.fetcher_parameters import FetcherParameters
 from app.runners.fetchers.github.github_fetcher import GithubFetcher
-
-log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class GithubGitService(AbstractGitService):
@@ -19,8 +16,8 @@ class GithubGitService(AbstractGitService):
     def checker(self, repo_url=None):
         self.run_checker(GithubChecker, repo_url=repo_url)
 
-    def fetch_data(self, repo_url=None) -> bool:
+    def fetch_data(self, fetcher_parameters: FetcherParameters) -> bool:
         if not self.data.enabled:
             return False
-        self.run_fetcher(GithubFetcher, repo_url=repo_url)
+        self.run_fetcher(GithubFetcher, parameters=fetcher_parameters)
         return True

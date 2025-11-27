@@ -114,22 +114,3 @@ class PermissionsFetcher(AbstractFetcher):
         # Check existing permissions
         for _permission in db_permissions:
             self.process_deleted_permission(_permission, repo=repo)
-
-    def process_deleted_permission(self, permission, repo=None, project=None):
-        text = (
-            f"Permission for {'project' if project is not None else 'repo'} has been deleted,"
-            f" entity: {permission.group_id if permission.group_id else permission.user_id}"
-        )
-        notification = Notification(
-            repository=repo,
-            group=permission.group,
-            user=permission.user,
-            notified=True,
-            permission_type=permission.permission,
-            action_type=NotificationActionEnum.DELETE,
-            type=NotificationEnum.PERMISSIONS,
-            project=project,
-            content=text,
-        )
-        process_notification(notification, self.session)
-        self.session.delete(permission)

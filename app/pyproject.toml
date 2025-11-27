@@ -12,7 +12,7 @@ psycopg2-binary = "^2.9.3"
 alembic = "^1.8.1"
 PyYAML = "^6.0"
 requests = "^2.28.1"
-dateparser = "1.2.0"
+dateparser = "1.2.1"
 giturlparse = "^0.12.0"
 PyGithub = "^2.0.0"
 hvac = "^2.0.0"
@@ -23,9 +23,13 @@ SQLAlchemy-Utils = "^0.41.1"
 jinja2 = "^3.1.2"
 jproperties = "^2.1.1"
 apprise = "^1.9.0"
+pytest = "^8.3.4"
+psycopg2 = "^2.9.10"
+atlassian-python-api = "^4.0.7"
+inquirer = "^3.4.1"
 
 
-[tool.poetry.dev-dependencies]
+[poetry.group.dev.dependencies]
 flake8 = "^7.0.0"
 black = "^24.0.0"
 pre-commit = "^3.6.0"

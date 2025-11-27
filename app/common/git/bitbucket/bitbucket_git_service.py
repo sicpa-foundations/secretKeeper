@@ -1,10 +1,14 @@
 import logging
 
-from app.common.git.bitbucket.bitbucket_git_data import BitBucketGitData
-from app.common.git.bitbucket.bitbucket_api_wrapper import BitbucketApiWrapper
 from app.common.git.abstract_git_service import AbstractGitService
+from app.common.git.bitbucket.bitbucket_api_wrapper import BitbucketApiWrapper
+from app.common.git.bitbucket.bitbucket_git_data import BitBucketGitData
 from app.runners.checkers.bitbucket.bitbucket_checker import BitbuckeChecker
 from app.runners.fetchers.bitbucket.bitbucket_fetcher import BitbucketFetcher
+from app.runners.fetchers.bitbucket.bitbucket_permissions_project_fetcher import (
+    BitbucketPermissionProjectFetcher,
+)
+from app.runners.fetchers.fetcher_parameters import FetcherParameters
 
 log = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,8 +24,12 @@ class BitBucketGitService(AbstractGitService):
         log.info("Running BitBucket checker...")
         self.run_checker(BitbuckeChecker, repo_url=repo_url)
 
-    def fetch_data(self, repo_url=None) -> bool:
+    def fetch_data(self, parameters: FetcherParameters) -> bool:
         if not self.data.enabled:
             return False
-        self.run_fetcher(BitbucketFetcher, repo_url=repo_url)
+        self.run_fetcher(BitbucketFetcher, parameters=parameters)
         return True
+
+    def fetch_permissions(self, parameters: FetcherParameters):
+        self.run_fetcher(BitbucketPermissionProjectFetcher, parameters=parameters)
+        super().fetch_permissions(parameters=parameters)

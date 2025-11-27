@@ -4,13 +4,14 @@ git_sources:
     url: "https://XXX"
     type: "bitbucket"
     mode: 'incremental'
+    block_pr_on_secret: false
     credentials_env:
       username: 'BITBUCKET_ACCESS_USERNAME'
       token: 'BITBUCKET_ACCESS_TOKEN'
     ssh:
       private_key: '~/.ssh/id_ed25519'
       port: 22
-      strict_host_key_checking: 'no'
+      strict_host_key_checking: 'yes'
     excludes:
       repositories:
   github:
@@ -51,21 +52,31 @@ best_practices:
     check_access_to_admin:
       enable: true
       notification: true
+      enforce: false
     check_default_permissions:
       enable: true
       notification: true
       default_value: NO_ACCESS
+      enforce: false
     check_no_external_user_as_admin:
       enable: true
       notification: true
+      enforce: false
+    check_web_hook:
+      enable: false
+      notification: false
+      enforce: false
+      bitbucket_webhook: 'https://XXXX'
     check_number_admin:
       enable: true
       notification: true
       max: 5
+      enforce: false
     check_permissions_read:
       enable: true
       notification: true
       groups: [ ]
+      enforce: false
     check_permissions_admin:
       enable: true
       notification: false
@@ -74,6 +85,7 @@ best_practices:
         - app_git_ww_system_administrator
       forbidden_groups:
         - app_git_ww
+      enforce: false
     check_permissions_write:
       enable: true
       notification: true
@@ -116,6 +128,7 @@ scanner:
       - node_modules
       - tutorials
       - notebooks
+      - .git
     extensions:
       - .map
       - .sum

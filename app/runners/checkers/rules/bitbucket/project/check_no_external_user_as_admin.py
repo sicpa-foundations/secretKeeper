@@ -3,8 +3,8 @@ from app.runners.checkers.rules.bitbucket.project.abstract_project_checker impor
 )
 from app.utils.tools import read_config
 from common.models.notification_enum import NotificationEnum
-from common.models.permission_enum import PermissionEnum
 from common.models.notifications import Notification
+from common.models.permission_enum import PermissionEnum
 
 
 class CheckNoExternalUserAsAdmin(AbstractProjectChecker):
@@ -28,3 +28,6 @@ class CheckNoExternalUserAsAdmin(AbstractProjectChecker):
                         notified=not config["notification"],
                     )
                 )
+
+    def enforce_rule(self, project, session, config):
+        pass
